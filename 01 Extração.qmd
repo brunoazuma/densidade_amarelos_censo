@@ -1,0 +1,98 @@
+---
+title: "Densidade demográficas de amarelos em São Paulo - Censo 2022"
+format: html
+---
+
+# Densidade demográficas de amarelos em São Paulo - Censo 2022 - Extração
+
+Nesse notebook, vamos apenas extrair os dados necessários do Censo 2022.
+
+## Setup inicial
+
+Primeiro, vamos importar as bibliotecas necessárias.
+
+```{python}
+import geopandas as gpd
+import pandas as pd
+from os import path, makedirs
+```
+
+Agora, para exibição dos resultados, vamos precisar dos polígonos dos setores censitários.
+
+# Geometrias dos setores censitários
+
+```{python}
+url_geom = 'https://ftp.ibge.gov.br/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios/malha_com_atributos/setores/gpkg/UF/SP/SP_setores_CD2022.gpkg'
+
+gdf = gpd.read_file(url_geom)
+gdf.head()
+```
+
+Em seguida, vamos chegar o sistema de coordenadas e, caso necessário, alterar para o sirgas 2000 23S.
+
+```{python}
+gdf.crs
+```
+
+```{python}
+gdf = gdf.to_crs('EPSG:31983')
+gdf.head()
+```
+
+# Dados detalhados de cor ou raça
+
+Agora, vamos extrair o arquivo `Pessoas - Cor ou raça` que contém os dados detalhados de pessoas. A nossa variável de interesse é a `V01319`, `Pessoas - Cor ou raça - Cor ou raça é amarela`.
+
+```{python}
+url_cor = 'https://ftp.ibge.gov.br/Censos/Censo_Demografico_2022/Agregados_por_Setores_Censitarios/Agregados_por_Setor_csv/Agregados_por_setores_cor_ou_raca_BR.zip'
+df = pd.read_csv(url_cor, sep=';', dtype=str)
+df.head()
+```
+
+# Filtrando apenas setores de São Paulo
+
+Em ambos os aquivos temos mais setores censitários do que desejamos. No arquivo com as geometrias, temos todos os municípios de São Paulo, enquanto no arquivo de cor ou raça temos todos os setores censitários do Brasil.
+
+Vamos filtrar o geodataframe com os polígonos para manter apenas os setores censitários de São Paulo e, depois, filtrar o dataframe de cor ou raça com base nos setores presentes no geodataframe.
+
+```{python}
+gdf = gdf[gdf['CD_MUN']=='3550308']
+gdf.head()
+```
+
+```{python}
+df = df[df['CD_SETOR'].isin(gdf['CD_SETOR'])]
+df.head()
+```
+
+Vamos conferir se os dois dataframes tem a mesma quantidade de registros com população maior que 0.
+
+```{python}
+gdf[gdf['v0001']>0].shape[0]
+```
+
+```{python}
+df.shape[0]
+```
+
+```{python}
+gdf[gdf['v0001']>0].shape[0] - df.shape[0]
+```
+
+Os dois dataframes tem a mesma quantidade de registros, então podemos prosseguir tranquilamente.
+
+# Salvando os arquivos em disco
+
+Nesse notebook, não vamos realizar nenhum tratamento adicional (como tratar os dados suprimidos ou unir os dataframes). Vamos apenas salvar os arquivos para realizar os tratamentos em um próximo notebook.
+
+```{python}
+data_path = 'data'
+if not path.exists(data_path):
+    makedirs(data_path)
+
+gdf.to_parquet(path.join(data_path, 'setores_censitarios.parquet'))
+```
+
+```{python}
+df.to_parquet(path.join(data_path, 'cor_ou_raça.parquet'), index=False)
+```
