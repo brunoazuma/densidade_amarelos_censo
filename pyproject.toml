@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "densidade-amarelos-censo"
+version = "0.1.0"
+description = ""
+authors = ["Bruno Azuma Balzano <brunoazuma@usp.br>"]
+license = "MIT License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">3.10,<4"
+jupyter = "^1.1.1"
+pandas = "^2.3.1"
+geopandas = "^1.1.1"
+leafmap = "^0.48.9"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
