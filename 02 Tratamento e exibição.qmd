@@ -1,0 +1,127 @@
+---
+title: "Densidade demográficas de amarelos em São Paulo - Censo 2022"
+format: html
+---
+
+# Densidade demográficas de amarelos em São Paulo - Censo 2022 - Tratamento e exibição
+
+Nesse notebook, vamos tratar e criar visualizações para os dados extraídos no notebook anterior.
+
+Novamente, vamos começar carregando as bibliotecas necessárias.
+
+```{python}
+import geopandas as gpd
+import pandas as pd
+from os import path, makedirs
+import leafmap.kepler as leafmap
+import random
+```
+
+# Carregando os arquivos
+
+```{python}
+data_path = 'data'
+
+gdf = gpd.read_parquet(path.join(data_path, 'setores_censitarios.parquet'))
+gdf.head()
+```
+
+```{python}
+gdf.crs
+```
+
+```{python}
+df = pd.read_parquet(path.join(data_path, 'cor_ou_raça.parquet'))
+df.head()
+```
+
+# Unindo as tabelas
+
+Primeiro, vamos trazer a variável `V01319` para o geodataframe.
+
+```{python}
+gdf2 = gdf.merge(
+    df[['CD_SETOR', 'V01319']],
+    on = 'CD_SETOR',
+    how='left'
+)
+
+gdf2.head()
+```
+
+# Avaliando a variável de interesse
+
+Primeiro, vamos ver a distribuição de valores da variável de interesse.
+
+```{python}
+gdf2['V01319'].value_counts()
+```
+
+O Censo costuma omitir valores de frequência menores nos dados agregados por setores censitários afim de preservar a privacidade dos respondentes. No Censo de 2022, o critério foi o seguinte:
+
+> No arquivo agregado por setores, o IBGE optou pela restrição de dados como forma de proteção dos dados dos informantes do Censo Demográfico 2022. Assim, para os setores com menos de cinco domicílios particulares permanentes omitiram-se os valores da maioria das variáveis de dados. Foram mantidas apenas as variáveis estruturais tais como: a identificação das subdivisões geográficas, o número de domicílios e a população. Para indicar a omissão dos dados, os valores das variáveis foram preenchidos com “x”. Esta medida, já estava em vigor no Censo Demográfico 2010.
+
+> Para os demais setores, tendo em vista que se trata de um recorte geográfico muito desagregado, deve ser evitada a divulgação de células com frequências iguais a 1 ou 2. O objetivo é evitar uma possível reconstrução do questionário individual dos domicílios ao combinar as respostas dessas frequências baixas. Desta forma, para aumentar os valores das frequências nas células utilizou-se a técnica de recodificação global, que agrupa valores das variáveis utilizadas nas tabelas. Mais especificamente, a variável de idade da pessoa, é apresentada em grupos quinquenais. Após este procedimento, restando células com frequências iguais a 1 ou 2, estes valores também são substituídos por “x”. 
+
+Para os fins desta exploração, vamos apenas transformar aleatoriamente os registros com `X` em 1 ou 2.
+
+```{python}
+gdf2.loc[gdf2['V01319']=='X', 'V01319'] = gdf2.loc[gdf2['V01319']=='X', 'V01319'].apply(lambda x: random.choice([1, 2]))
+
+gdf2.loc[~gdf2['V01319'].isna(), 'V01319'] = gdf2.loc[~gdf2['V01319'].isna(), 'V01319'] .astype(int)
+gdf2.head()
+```
+
+```{python}
+gdf2['V01319'].value_counts()
+```
+
+Agora que temos apenas números, vamos ver o histograma.
+
+```{python}
+gdf2['V01319'].hist(bins=20)
+```
+
+Vemos uma distribuição bastante assimétrica, com a maior parteda distribuição nas primeiras barras.
+
+Vamos agora avaliar os casos com valores nulos.
+
+```{python}
+gdf2[gdf2['V01319'].isna()].shape[0]
+```
+
+```{python}
+gdf2.loc[(gdf2['V01319'].isna() & gdf2['v0001']>0)]
+```
+
+Vemos que os 412 registros com valores nulos são exatamente os setores censitários que não possuem população. Logo, podemos converter os valores nulos em 0 com segurança.
+
+```{python}
+gdf2.loc[gdf2['V01319'].isna(), 'V01319'] = 0
+gdf2[gdf2['V01319'].isna()].shape[0]
+```
+
+## Criando variáveis relativas
+
+Além da variável absoluta, vamos criar duas variáveis relativas: `% de amarelos na população` e `Quantidade de amarelos por km²`.
+
+```{python}
+gdf2.loc[gdf2['v0001']>0, 'pct_amarelos'] = \
+    gdf2.loc[gdf2['v0001']>0, 'V01319']/gdf2.loc[gdf2['v0001']>0, 'v0001']
+gdf2.loc[gdf2['AREA_KM2']>0, 'amarelos_km2'] = \
+    gdf2.loc[gdf2['v0001']>0, 'V01319']/gdf2.loc[gdf2['v0001']>0, 'AREA_KM2']
+gdf2.head()
+```
+
+# Exibindo no mapa
+
+```{python}
+m = leafmap.Map(center=[-23.5505, -46.6333], zoom=10, basemap="CartoDB.Positron")
+m.add_gdf(gdf2, column="pct_amarelos", layer_name="Percentual de Amarelos", cmap="YlOrRd")
+# m.add_basemap("SATELLITE")
+m
+```
+
+```{python}
+m.to_html('mapa.html')
+```
